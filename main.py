@@ -1,13 +1,21 @@
 import math
 import random
 
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import linprog
 
 from oracle import ExampleOracle
 
+def graph(formula, x):
+    y = formula(x)
+    plt.plot(x, y)
+
 def midpoint(a, b):
-    return (a + b) / 2
+    try:
+        return (a + b) / 2
+    except:
+        return [(i + j) / 2 for i, j in zip(a, b)]
 
 def generate_dataset(dim, num_hyperplanes, eps, delta, dist, oracle):
     term1 = 2 / eps * math.log(4 / delta, 2)
@@ -19,7 +27,7 @@ def generate_dataset(dim, num_hyperplanes, eps, delta, dist, oracle):
     num_samples = math.ceil(max(term1, term2))
 
     # too big for testing
-    num_samples = 1000
+    num_samples = 500
 
     if dist == "uniform":
         dataset = np.random.random_sample((num_samples, dim))
@@ -34,7 +42,7 @@ def find_surrogate(point, center, d2_hat, oracle):
     vec = center - point
     vec /= np.linalg.norm(vec)
     d2_hat_vec = d2_hat * vec
-    surrogate = (point + center) / 2
+    surrogate = midpoint(point, center)
 
     lo = point
     hi = center
@@ -55,11 +63,11 @@ def polly(dim, num_hyperplanes, dataset, labels, oracle):
     d2_hat *= math.pow((1 / (math.pow(dim, 1.5) * len(dataset))), dim)
 
     # regular d2_hat is extremely low and can't really be handled
-    if d2_hat < 1e-16:
-        d2_hat = 1e-16
+    if d2_hat < 1e-8:
+        d2_hat = 1e-8
 
-    positive_samples = dataset[labels]
-    negative_samples = dataset[~labels]
+    positive_samples = np.array(dataset[labels])
+    negative_samples = np.array(dataset[~labels])
 
     pm = positive_samples.mean()
 
@@ -81,25 +89,92 @@ def polly(dim, num_hyperplanes, dataset, labels, oracle):
     for i, point in enumerate(negative_samples):
         print(str(i+1) + "/" + str(len(negative_samples)))
         surrogate = find_surrogate(point, center, d2_hat, oracle)
-        surrogate_points[point] = surrogate
+        surrogate_points[tuple(point)] = tuple(surrogate)
+        plt.plot(surrogate[0], surrogate[1], marker='o', markersize=1, color="blue")
+    for point in positive_samples:
+        plt.plot(point[0], point[1], marker='o', markersize=1, color="red")
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 1.0)
+    plt.savefig("surr.png")
+    plt.clf()
 
     hyperplanes = []
-    while negative_samples:
+    while len(negative_samples) > 0:
         point = negative_samples[0]
-        surrogate = surrogate_points[point]
+        surrogate = surrogate_points[tuple(point)]
 
-        same_side = [b in negative_samples if not oracle.label_point(midpoint(surrogate, surrogate_points[b]))]
+        same_side = np.array([neg for neg in negative_samples if not oracle.label_point(midpoint(surrogate, surrogate_points[tuple(neg)]))])
+        other_samples = np.array([neg for neg in negative_samples if oracle.label_point(midpoint(surrogate, surrogate_points[tuple(neg)]))])
+        for p in positive_samples:
+            plt.plot(p[0], p[1], marker='o', markersize=1, color="red")
+        for s in same_side:
+            plt.plot(s[0], s[1], marker='o', markersize=1, color="blue")
+        plt.xlim(0, 1.0)
+        plt.ylim(0, 1.0)
+        plt.savefig("test{}.png".format(len(negative_samples)))
+        plt.clf()
 
         # Use LP to find a halfspace containing same_side but not positive_samples
-        sol = linprog()[0]
-        hyperplanes.append
+        c = [0] * (dim + 1)
+
+        A = []
+        for i, pos in enumerate(positive_samples):
+            A.append(list(-pos) + [1])
+        for i, sam in enumerate(same_side):
+            A.append(list(sam) + [-1])
+
+        b = [-1] * (len(positive_samples) + len(same_side))
+
+        lp = linprog(c=c, A_ub=A, b_ub=b)
+        sol = lp["x"]
+        opt = lp["fun"]
+
+        if not lp["success"]:
+            print("here")
+            A = []
+            for i, pos in enumerate(positive_samples):
+                A.append(list(pos) + [-1])
+            for i, sam in enumerate(same_side):
+                A.append(list(-sam) + [1])
+            lp = linprog(c=c, A_ub=A, b_ub=b)
+            sol = lp["x"]
+            opt = lp["fun"]
+
+        if not lp["success"]:
+            print("here2")
+            # Then hyperplane has positive slope
+            # Why can't LP produce positive slope?
+
+        print("opt {}".format(opt))
+        hyperplanes.append([sol[-3:-1], sol[-1]])
+        negative_samples = other_samples
+
+
+    if dim == 2:
+        for h in hyperplanes:
+            a1 = h[0][0]
+            a2 = h[0][1]
+            b = h[1]
+
+            m = -a1 / a2
+            b = b / a2
+            print("y = {}x + {}".format(m, b))
+            graph(lambda x: m*x+b, np.arange(0, 1, 0.01))
+        for d in dataset:
+            if oracle.label_point(d):
+                plt.plot(d[0], d[1], marker='o', markersize=1, color="red")
+            else:
+                plt.plot(d[0], d[1], marker='o', markersize=1, color="blue")
+        plt.xlim(0, 1.0)
+        plt.ylim(0, 1.0)
+        plt.savefig("pred.png")
 
 
 
 if __name__ == "__main__":
     dim = 2
     num_hyperplanes = 4
-    eps = 0.05
+    eps = 0.5
     delta = 1e-3
     dist = "uniform"
     oracle = ExampleOracle()
