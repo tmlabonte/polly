@@ -3,7 +3,7 @@ Implementation of Kwek &amp; Pitt (1998) polynomial time randomized algorithm fo
 (One of my favorite geometrically elegant machine learning algorithms)
 Paper: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.30.7509
 
-![image]("pred.png")
+![image](pred.png)
 
 Algorithm overview:
 1. Sample points from any distribution in the (unit) positive orthant.
