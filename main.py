@@ -99,56 +99,40 @@ def polly(dim, num_hyperplanes, dataset, labels, oracle):
     plt.clf()
 
     hyperplanes = []
-    while len(negative_samples) > 0:
-        point = negative_samples[0]
-        surrogate = surrogate_points[tuple(point)]
+    flag = True
+    while True:
+        while len(negative_samples) > 0:
+            point = negative_samples[0]
+            surrogate = surrogate_points[tuple(point)]
 
-        same_side = np.array([neg for neg in negative_samples if not oracle.label_point(midpoint(surrogate, surrogate_points[tuple(neg)]))])
-        other_samples = np.array([neg for neg in negative_samples if oracle.label_point(midpoint(surrogate, surrogate_points[tuple(neg)]))])
-        for p in positive_samples:
-            plt.plot(p[0], p[1], marker='o', markersize=1, color="red")
-        for s in same_side:
-            plt.plot(s[0], s[1], marker='o', markersize=1, color="blue")
-        plt.xlim(0, 1.0)
-        plt.ylim(0, 1.0)
-        plt.savefig("test{}.png".format(len(negative_samples)))
-        plt.clf()
+            same_side = np.array([neg for neg in negative_samples if not oracle.label_point(midpoint(surrogate, surrogate_points[tuple(neg)]))])
+            other_samples = np.array([neg for neg in negative_samples if oracle.label_point(midpoint(surrogate, surrogate_points[tuple(neg)]))])
 
-        # Use LP to find a halfspace containing same_side but not positive_samples
-        c = [0] * (dim + 1)
+            # Use LP to find a halfspace containing same_side but not positive_samples
+            c = [0] * (dim + 1)
 
-        A = []
-        for i, pos in enumerate(positive_samples):
-            A.append(list(-pos) + [1])
-        for i, sam in enumerate(same_side):
-            A.append(list(sam) + [-1])
-
-        b = [-1] * (len(positive_samples) + len(same_side))
-
-        lp = linprog(c=c, A_ub=A, b_ub=b)
-        sol = lp["x"]
-        opt = lp["fun"]
-
-        if not lp["success"]:
-            print("here")
             A = []
             for i, pos in enumerate(positive_samples):
-                A.append(list(pos) + [-1])
+                A.append(list(-pos) + [1])
             for i, sam in enumerate(same_side):
-                A.append(list(-sam) + [1])
-            lp = linprog(c=c, A_ub=A, b_ub=b)
+                A.append(list(sam) + [-1])
+
+            b = [-1] * (len(positive_samples) + len(same_side))
+
+            lp = linprog(c=c, A_ub=A, b_ub=b, bounds=[-np.inf, np.inf])
+
+            if not lp["success"] or len(hyperplanes) == num_hyperplanes:
+                d2_hat /= 2
+                flag = False
+                break
+
             sol = lp["x"]
             opt = lp["fun"]
 
-        if not lp["success"]:
-            print("here2")
-            # Then hyperplane has positive slope
-            # Why can't LP produce positive slope?
-
-        print("opt {}".format(opt))
-        hyperplanes.append([sol[-3:-1], sol[-1]])
-        negative_samples = other_samples
-
+            hyperplanes.append([sol[0:2], sol[2]])
+            negative_samples = other_samples
+        if flag:
+            break
 
     if dim == 2:
         for h in hyperplanes:
