@@ -1,6 +1,6 @@
 # polly
-Implementation of Kwek &amp; Pitt (1998) polynomial time randomized algorithm for PAC-learning polytopes
-(One of my favorite geometrically elegant machine learning algorithms)
+Implementation of Kwek &amp; Pitt (1998) polynomial time randomized algorithm for PAC-learning polytopes. One of my favorite geometrically elegant machine learning algorithms!
+
 Paper: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.30.7509
 
 ![image](pred.png)
